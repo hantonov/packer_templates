@@ -1,0 +1,117 @@
+{
+  "variables": {
+    "vc_username": "{{env `VC_USERNAME`}}",
+    "vc_password": "{{env `VC_PASSWORD`}}",
+    "build_version": "{{env `BUILD_SOURCEVERSION`}}",
+    "build_id": "{{env `BUILD_BUILDID`}}"
+  },
+
+  "builders": [
+    {
+      "type": "vsphere-iso",
+
+      "vcenter_server":      "esxiserver"
+      "username":            "{{user `vc_username`}}",
+      "password":            "{{user `vc_password`}}",
+      "insecure_connection": "true",
+      "datacenter": 	     "Datacenter",
+
+
+      "vm_name": "image-windows2016-{{ user `build_id`}}",
+      "host":    "esxiserver"
+      "folder":  "Build",
+      "cluster": "cluster",
+      "resource_pool": "Build-RP",
+      "datastore": "vsanDatastore",
+      "network" : "vRack-DPortGroup-External-PUBLIC",
+      "notes": "commit: {{user `build_version`}}",
+
+      "guest_os_type": "windows9Server64Guest",
+
+      "communicator": "winrm",
+      "winrm_username": "vagrant",
+      "winrm_password": "vagrant",
+      "shutdown_timeout": "30m",
+
+      "CPUs":             2,
+      "RAM":              16384,
+      "RAM_reserve_all": true,
+
+      "disk_controller_type":  "pvscsi",
+      "disk_size":        32768,
+      "disk_thin_provisioned": true,
+
+      "network_card": "vmxnet3",
+      "convert_to_template": true,
+
+      "iso_paths": [
+        "[vsanDatastore] ISOs/en_windows_server_2016_updated_feb_2018_x64_dvd_11636692.iso",
+        "[vsanDatastore] ISOs/VMware-tools-windows-10.3.5-10430147.iso"
+      ],
+      "floppy_files": [
+        "{{template_dir}}/floppy_files/"
+      ]
+    },
+    {
+      "type": "virtualbox-iso",
+      "vboxmanage": [
+        [ "modifyvm", "{{.Name}}", "--memory", "2048" ],
+        [ "modifyvm", "{{.Name}}", "--vram", "48" ],
+        [ "modifyvm", "{{.Name}}", "--cpus", "2" ]
+      ],
+      "guest_os_type": "Windows2016_64",
+      "vm_name": "image-windows2016-{{ user `build_id`}}",
+      "disk_size":    41440,
+      "boot_wait":    "5s",
+      "headless": true,
+      "floppy_files": [
+        "{{template_dir}}/floppy_files/"
+      ],
+      "guest_additions_mode": "attach",
+      "iso_url": "/Users/XXXXXXXXXXXXX/Downloads/en_windows_server_2016_vl_x64_dvd_11636701.iso",
+      "iso_checksum_type": "sha256",
+      "iso_checksum": "47919ce8b4993f531ca1fa3f85941f4a72b47ebaa4d3a321fecf83ca9d17e6b8",
+      "communicator": "winrm",
+      "winrm_password": "vagrant",
+      "winrm_username": "vagrant",
+      "shutdown_command": "shutdown /s /t 10 /f /d p:4:1 /c \"Packer Shutdown\""
+    }
+  ],
+
+  "provisioners": [
+    {
+      "type": "windows-shell",
+      "inline": ["echo {{user `build_version`}} > c:\\build_version.txt"]
+    },
+    {
+      "type": "powershell",
+      "script": "scripts/windows-updates.ps1",
+      "elevated_user": "vagrant",
+      "elevated_password": "vagrant",
+      "only": ["vsphere-iso"]
+    },
+    {
+      "type": "powershell",
+      "script": "scripts/tools.ps1",
+      "elevated_user": "vagrant",
+      "elevated_password": "vagrant",
+      "only": ["vsphere-iso"]
+    },
+    {
+      "type": "powershell",
+      "script": "scripts/cleanup.ps1",
+      "elevated_user": "vagrant",
+      "elevated_password": "vagrant"
+    }
+  ],
+  "post-processors": [
+    {
+      "type": "vagrant",
+      "keep_input_artifact": true,
+      "output": "windows2016min-{{.Provider}}.box",
+      "vagrantfile_template": "vagrantfile-windows.template",
+      "only": ["virtualbox-iso"]
+    }
+  ]
+}
+
